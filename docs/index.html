@@ -21,15 +21,19 @@
         // basePath: 'https://raw.githubusercontent.com/mrshawco/docsify/master/docs',
         // 名称映射，减少递归查询
         alias: {
-            '/.*/_sidebar.md': '/_sidebar.md',
-            '/.*/_coverpage.md': '/_coverpage.md',
+            '/interview/.*/_sidebar.md': '/interview/_sidebar.md',
+            '/knowledge/.*/_sidebar.md': '/knowledge/_sidebar.md',
+            '/interview/.*/_navbar.md': '/interview/_navbar.md',
+            '/knowledge/.*/_navbar.md': '/knowledge/_navbar.md',
         },
         // 自定义侧边栏。设置为 true 后会加载 _sidebar.md 文件，也可以自定义加载的文件名
         loadSidebar: true,
         // 自定义侧边栏后默认不会再生成目录，可以通过设置生成目录的最大层级开启这个功能
         subMaxLevel: 2,
-        // 自动显示标题
-        autoHeader: true,
+        // 自定义导航栏。_navbar.md
+        loadNavbar: true,
+        // 自动显示标题（默认为false，若没有一级标题，就将当前路由作为标题（标题不会附加到侧边栏））
+        // autoHeader: true,
         // 切换页面后自动调到页面顶部
         auto2top: true,
         // 封面。设置为 true 后会加载 _coverpage.md 文件，，也可以自定义加载的文件名
@@ -103,6 +107,8 @@
 <script src="//cdn.jsdelivr.net/npm/prismjs@1/components/prism-java.min.js"></script>
 <!-- 代码复制 -->
 <script src="//cdn.jsdelivr.net/npm/docsify-copy-code/dist/docsify-copy-code.min.js"></script>
+<!-- 解析emoji -->
+<script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/emoji.min.js"></script>
 <!-- 分页插件 -->
 <!--<script src="//unpkg.com/docsify-pagination/dist/docsify-pagination.min.js"></script>-->
 <!-- 字数统计 -->
