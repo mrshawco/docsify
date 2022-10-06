@@ -1,7 +1,4 @@
-* [首页](/)
 * 基础
 
-  * [Java集合](/knowledge/base/Java集合)
+  * [Java基础](/interview/docs/Java基础)
 * 进阶
-
-  * [JUC](/knowledge/advance/juc)

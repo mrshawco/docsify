@@ -1,4 +1,3 @@
-* [首页](/)
 * 基础
 
   * [Java集合](/knowledge/base/Java集合)
