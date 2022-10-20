@@ -1289,3 +1289,405 @@ public class SynchronousQueueDemo {
 - 生产者消费者模式
 - 线程池
 - 消息中间件
+
+## 8. synchronized 和 Lock 有什么区别？
+
+- 原始结构
+
+  - synchronized 是关键字属于 JVM 层面，反应在字节码上是 monitorenter 和 monitorexit，其底层是通过 monitor 对象来完成，其实 wait/notify 等方法也是依赖 monitor 对象只有在同步快或方法中才能调用 wait/notify 等方法。
+  - Lock 是具体类（java.util.concurrent.locks.Lock）是 api 层面的锁。
+
+- 使用方法
+
+  - synchronized 不需要用户手动去释放锁，当 synchronized 代码执行完后系统会自动让线程释放对锁的占用。
+  - ReentrantLock 则需要用户手动的释放锁，若没有主动释放锁，可能导致出现死锁的现象，lock() 和 unlock() 方法需要配合 try/finally 语句来完成。
+
+- 等待是否可中断
+
+  - synchronized 不可中断，除非抛出异常或者正常运行完成。
+  - ReentrantLock 可中断，设置超时方法 tryLock(long timeout, TimeUnit unit)，lockInterruptibly() 放代码块中，调用 interrupt() 方法可中断。
+
+- 加锁是否公平
+
+  - synchronized 非公平锁
+  - ReentrantLock 默认非公平锁，构造方法中可以传入 boolean 值，true 为公平锁，false 为非公平锁。
+
+- 锁可以绑定多个 Condition
+
+  - synchronized 没有 Condition。
+  - ReentrantLock 用来实现分组唤醒需要唤醒的线程们，可以精确唤醒，而不是像 synchronized 要么随机唤醒一个线程要么唤醒全部线程。
+
+  
+
+  代码演示：
+
+  ```java
+  // 多线程之间按顺序调用，实现 A-> B -> C 三个线程启动，要求如下：
+  // AA打印5次，BB打印10次，CC打印15次
+  // 紧接着
+  // AA打印5次，BB打印10次，CC打印15次
+  // …
+  // 来10轮
+  
+  import java.util.concurrent.locks.Condition;
+  import java.util.concurrent.locks.Lock;
+  import java.util.concurrent.locks.ReentrantLock;
+  
+  class ShareResource {
+      // A 1   B 2   c 3
+      private int number = 1;
+      // 创建一个重入锁
+      private Lock lock = new ReentrantLock();
+  
+      // 这三个相当于备用钥匙
+      private Condition condition1 = lock.newCondition();
+      private Condition condition2 = lock.newCondition();
+      private Condition condition3 = lock.newCondition();
+  
+      public void print5() {
+          lock.lock();
+          try {
+              // 判断
+              while(number != 1) {
+                  // 不等于1，需要等待
+                  condition1.await();
+              }
+  
+              // 干活
+              for (int i = 0; i < 5; i++) {
+                  System.out.println(Thread.currentThread().getName() + "\t " + number + "\t" + i);
+              }
+  
+              // 唤醒 （干完活后，需要通知B线程执行）
+              number = 2;
+              // 通知2号去干活了
+              condition2.signal();
+          } catch (Exception e) {
+              e.printStackTrace();
+          } finally {
+              lock.unlock();
+          }
+      }
+  
+      public void print10() {
+          lock.lock();
+          try {
+              // 判断
+              while(number != 2) {
+                  // 不等于1，需要等待
+                  condition2.await();
+              }
+  
+              // 干活
+              for (int i = 0; i < 10; i++) {
+                  System.out.println(Thread.currentThread().getName() + "\t " + number + "\t" + i);
+              }
+  
+              // 唤醒 （干完活后，需要通知C线程执行）
+              number = 3;
+              // 通知2号去干活了
+              condition3.signal();
+          } catch (Exception e) {
+              e.printStackTrace();
+          } finally {
+              lock.unlock();
+          }
+      }
+  
+      public void print15() {
+          lock.lock();
+          try {
+              // 判断
+              while(number != 3) {
+                  // 不等于1，需要等待
+                  condition3.await();
+              }
+  
+              // 干活
+              for (int i = 0; i < 15; i++) {
+                  System.out.println(Thread.currentThread().getName() + "\t " + number + "\t" + i);
+              }
+  
+              // 唤醒 （干完活后，需要通知C线程执行）
+              number = 1;
+              // 通知1号去干活了
+              condition1.signal();
+          } catch (Exception e) {
+              e.printStackTrace();
+          } finally {
+              lock.unlock();
+          }
+      }
+  }
+  
+  public class SynchronizedAndReentrantLockDemo {
+      public static void main(String[] args) {
+          ShareResource shareResource = new ShareResource();
+          int num = 10;
+  
+          new Thread(() -> {
+              for (int i = 0; i < num; i++) {
+                      shareResource.print5();
+              }
+          }, "A").start();
+  
+          new Thread(() -> {
+              for (int i = 0; i < num; i++) {
+                  shareResource.print10();
+              }
+          }, "B").start();
+  
+          new Thread(() -> {
+              for (int i = 0; i < num; i++) {
+                  shareResource.print15();
+              }
+          }, "C").start();
+      }
+  }
+  ```
+  
+
+## 9. 线程池使用过吗？谈谈对 ThreadPoolExector 的理解？
+
+### **为什使用线程池，线程池的优势？**
+
+线程池用于多线程处理中，它可以根据系统的情况，可以有效控制线程执行的数量，优化运行效果。线程池做的工作主要是控制运行的线程的数量，处理过程中将任务放入队列，然后在线程创建后启动这些任务，如果线程数量超过了最大数量，那么超出数量的线程排队等候，等其它线程执行完毕，再从队列中取出任务来执行。
+
+主要特点为：
+
+- 线程复用
+- 控制最大并发数量
+- 管理线程
+
+主要优点
+
+- 降低资源消耗，通过重复利用已创建的线程来降低线程创建和销毁造成的消耗。
+- 提高相应速度，当任务到达时，任务可以不需要的等到线程创建就能立即执行。
+- 提高线程的可管理性，线程是稀缺资源，如果无限制的创建，不仅仅会消耗系统资源，还会降低体统的稳定性，使用线程可以进行统一分配，调优和监控。
+
+### **创建线程的几种方式**
+
+- 继承 Thread
+
+- 实现 Runnable 接口
+
+- 实现 Callable
+
+```java
+  public class CallableDemo {
+      public static void main(String[] args) throws ExecutionException, InterruptedException {
+          // 在 FutureTask 中传入 Callable 的实现类
+          FutureTask<Integer> futureTask = new FutureTask<>(new Callable<Integer>() {
+              @Override
+              public Integer call() throws Exception {
+                  return 666;
+              }
+          });
+          // 把 futureTask 放入线程中
+          new Thread(futureTask).start();
+          // 获取结果
+          Integer res = futureTask.get();
+          System.out.println(res);
+      }
+  }
+```
+
+### **线程池如何使用？**
+
+架构说明
+
+![img](https://s2.loli.net/2022/10/16/FHVEmkJKZNR5XYx.jpg)
+
+编码实现
+
+- Executors.newSingleThreadExecutor()：只有一个线程的线程池，因此所有提交的任务是顺序执行
+- Executors.newCachedThreadPool()：线程池里有很多线程需要同时执行，老的可用线程将被新的任务触发重新执行，如果线程超过60秒内没执行，那么将被终止并从池中删除
+- Executors.newFixedThreadPool()：拥有固定线程数的线程池，如果没有任务执行，那么线程会一直等待
+- Executors.newScheduledThreadPool()：用来调度即将执行的任务的线程池
+- Executors.newWorkStealingPool()：newWorkStealingPool 适合使用在很耗时的操作，但是newWorkStealingPool 不是 ThreadPoolExecutor 的扩展，它是新的线程池类 ForkJoinPool 的扩展，但是都是在统一的一个 Executors 类中实现，由于能够合理的使用 CPU 进行对任务操作（并行操作），所以适合使用在很耗时的任务中
+
+ThreadPoolExecutor
+
+ThreadPoolExecutor 作为 java.util.concurrent 包对外提供基础实现，以内部线程池的形式对外提供管理任务执行，线程调度，线程池管理等等服务。
+
+### **线程池的几个重要参数介绍？**
+
+| 参数                     | 作用                                                         |
+| ------------------------ | ------------------------------------------------------------ |
+| corePoolSize             | 核心线程池大小                                               |
+| maximumPoolSize          | 最大线程池大小                                               |
+| keepAliveTime            | 线程池中超过 corePoolSize 数目的空闲线程最大存活时间；可以allowCoreThreadTimeOut(true) 使得核心线程有效时间 |
+| TimeUnit                 | keepAliveTime 时间单位                                       |
+| workQueue                | 阻塞任务队列                                                 |
+| threadFactory            | 新建线程工厂                                                 |
+| RejectedExecutionHandler | 当提交任务数超过 maxmumPoolSize+workQueue 之和时，任务会交给RejectedExecutionHandler 来处理 |
+
+说说线程池的底层工作原理？
+
+**重点讲解：** 其中比较容易让人误解的是：corePoolSize，maximumPoolSize，workQueue 之间关系。
+
+1. 当线程池小于 corePoolSize 时，新提交任务将创建一个新线程执行任务，即使此时线程池中存在空闲线程。
+2. 当线程池达到 corePoolSize 时，新提交任务将被放入 workQueue 中，等待线程池中任务调度执行。
+3. 当 workQueue 已满，且 maximumPoolSize 大于 corePoolSize 时，新提交任务会创建新线程执行任务。
+4. 当提交任务数超过 maximumPoolSize 时，新提交任务由 RejectedExecutionHandler 处理。
+5. 当线程池中超过 corePoolSize 线程，空闲时间达到 keepAliveTime 时，关闭空闲线程 。
+6. 当设置 allowCoreThreadTimeOut(true) 时，线程池中 corePoolSize 线程空闲时间达到 keepAliveTime 也将关闭。
+
+![img](https://s2.loli.net/2022/10/16/CTKjF3znpI8sHRd.jpg)
+
+## 10. 线程池用过吗？生产上你如何设置合理参数？
+
+### **线程池的拒绝策略你谈谈？**
+
+- 是什么
+  - 等待队列已经满了，再也塞不下新的任务，同时线程池中的线程数达到了最大线程数，无法继续为新任务服务。
+- 拒绝策略
+  - AbortPolicy：处理程序遭到拒绝将抛出运行时 RejectedExecutionException
+  - CallerRunsPolicy：线程调用运行该任务的 execute 本身。此策略提供简单的反馈控制机制，能够减缓新任务的提交速度。
+  - DiscardPolicy：不能执行的任务将被删除
+  - DiscardOldestPolicy：如果执行程序尚未关闭，则位于工作队列头部的任务将被删除，然后重试执行程序（如果再次失败，则重复此过程）
+
+### **Executors创建线程池的方法，你用哪个多？**
+
+Java 中的 BlockingQueue 主要有两种实现：
+
+- ArrayBlockingQueue 是一个用数组实现的有界阻塞队列，必须设置容量。
+- LinkedBlockingQueue 是一个用链表实现的有界阻塞队列，容量可以选择进行设置，不设置的话，将是一个无边界的阻塞队列，最大长度为 Integer.MAX_VALUE。
+
+newFixedThreadPool 和 newSingleThreadExecutor 创建 LinkedBlockingQueue时，并未指定容量。此时， LinkedBlockingQueue 就是一个无边界队列，对于一个无边界队列来说，是可以不断的向队列中加入任务的，这种情况下就有可能因为任务过多而导致内存溢出问题。
+
+newCachedThreadPool 和 newScheduledThreadPool 这两种方式创建的最大线程数可能是 Integer.MAX_VALUE，而创建这么多线程，有可能导致 OOM。
+
+### **你在工作中是如何使用线程池的，是否自定义过线程池使用？**
+
+自定义线程池：
+
+```java
+public class ThreadPoolExecutorDemo {
+
+    public static void main(String[] args) {
+        Executor executor = new ThreadPoolExecutor(2, 3, 1L, TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(5), 
+                Executors.defaultThreadFactory(), 
+                new ThreadPoolExecutor.DiscardPolicy());
+    }
+}
+```
+
+### **合理配置线程池你是如果考虑的？**
+
+- CPU 密集型
+  - CPU 密集的意思是该任务需要大量的运算，而没有阻塞，CPU 一直全速运行。
+  - CPU 密集型任务尽可能的少的线程数量，一般为 CPU 核数 + 1 个线程的线程池。
+- IO 密集型
+  - 由于 IO 密集型任务线程并不是一直在执行任务，可以多分配一点线程数，如 CPU * 2 。
+  - 也可以使用公式：CPU 核数 / (1 - 阻塞系数)；其中阻塞系数在 0.8 ～ 0.9 之间。
+
+## 11. 死锁编码以及定位分析
+
+**是什么**
+
+死锁是指两个或两个以上的进程在执行过程中，因争夺资源而造成的一种相互等待的现象，如果无外力的干涉那它们都将无法推进下去，如果系统的资源充足，进程的资源请求都能够得到满足，死锁出现的可能性就很低，否则就会因争夺有限的资源而陷入死锁。
+
+**产生死锁主要原因**
+
+1. 系统资源不足
+2. 进程运行推进的顺序不合适
+3. 资源分配不当
+
+**发生死锁的四个条件**
+
+1. 互斥条件，线程使用的资源至少有一个不能共享的。
+2. 至少有一个线程必须持有一个资源且正在等待获取一个当前被别的线程持有的资源。
+3. 资源不能被抢占。
+4. 循环等待。
+
+**如何解决死锁问题**
+
+破坏发生死锁的四个条件其中之一即可。
+
+**产生死锁的代码**（根据发生死锁的四个条件）：
+
+```java
+public class DeadLockDemo {
+    public static void main(String[] args) {
+        String lockA = "lockA";
+        String lockB = "lockB";
+
+        DeadLockDemo deadLockDemo = new DeadLockDemo();
+        Executor executor = Executors.newFixedThreadPool(2);
+        executor.execute(() -> deadLockDemo.method(lockA, lockB));
+        executor.execute(() -> deadLockDemo.method(lockB, lockA));
+    }
+
+    public void method(String lock1, String lock2) {
+        synchronized (lock1) {
+            System.out.println(Thread.currentThread().getName() + "--获取到：" + lock1 + "; 尝试获取：" + lock2);
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            synchronized (lock2) {
+                System.out.println("获取到两把锁!");
+            }
+        }
+    }
+}
+```
+
+**解决**
+
+jps -l 命令查定位进程号
+
+```sh
+28519 org.jetbrains.jps.cmdline.Launcher
+32376 com.intellij.idea.Main
+28521 com.cuzz.thread.DeadLockDemo
+27836 org.jetbrains.kotlin.daemon.KotlinCompileDaemon
+28591 sun.tools.jps.Jps
+```
+
+jstack 28521 找到死锁查看
+
+```sh
+2019-05-07 00:04:15
+Full thread dump Java HotSpot(TM) 64-Bit Server VM (25.191-b12 mixed mode):
+
+"Attach Listener" #13 daemon prio=9 os_prio=0 tid=0x00007f7acc001000 nid=0x702a waiting on condition [0x0000000000000000]
+   java.lang.Thread.State: RUNNABLE
+// ...
+Found one Java-level deadlock:
+=============================
+"pool-1-thread-2":
+  waiting to lock monitor 0x00007f7ad4006478 (object 0x00000000d71f60b0, a java.lang.String),
+  which is held by "pool-1-thread-1"
+"pool-1-thread-1":
+  waiting to lock monitor 0x00007f7ad4003be8 (object 0x00000000d71f60e8, a java.lang.String),
+  which is held by "pool-1-thread-2"
+
+Java stack information for the threads listed above:
+===================================================
+"pool-1-thread-2":
+        at com.cuzz.thread.DeadLockDemo.method(DeadLockDemo.java:34)
+        - waiting to lock <0x00000000d71f60b0> (a java.lang.String)
+        - locked <0x00000000d71f60e8> (a java.lang.String)
+        at com.cuzz.thread.DeadLockDemo.lambda$main$1(DeadLockDemo.java:21)
+        at com.cuzz.thread.DeadLockDemo$$Lambda$2/2074407503.run(Unknown Source)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+"pool-1-thread-1":
+        at com.cuzz.thread.DeadLockDemo.method(DeadLockDemo.java:34)
+        - waiting to lock <0x00000000d71f60e8> (a java.lang.String)
+        - locked <0x00000000d71f60b0> (a java.lang.String)
+        at com.cuzz.thread.DeadLockDemo.lambda$main$0(DeadLockDemo.java:20)
+        at com.cuzz.thread.DeadLockDemo$$Lambda$1/558638686.run(Unknown Source)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+
+Found 1 deadlock.
+```
+
+最后发现一个死锁。
